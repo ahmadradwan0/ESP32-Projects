@@ -11,10 +11,10 @@ class Screen
         Screen();
         bool Init();
         void Clear();
-        void Screen::ShowText(String msg,int x, int y ,int size);
+        void ShowText(String msg,int x, int y ,int size);
         void ShowTwoLine(String line1, String line2);
-        void Screen::Show();
-        int Screen::GetTextPixelWidth(String text, int size);
+        void Show();
+        int  GetTextPixelWidth(String text, int size);
 
     private:
         Adafruit_SSD1306 _display;

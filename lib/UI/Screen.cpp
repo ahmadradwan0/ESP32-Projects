@@ -10,26 +10,29 @@ Screen::Screen() : _display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET)
 {
 }
 
+// Returns true if the display was successfully initialized, false otherwise
 bool Screen::Init()
 {
     Wire.begin(8, 9);
 
-    if (!_display.begin(SSD1306_SWITCHCAPVCC, OLED_ADDR))
-    {
+    if (!_display.begin(SSD1306_SWITCHCAPVCC, OLED_ADDR)) {
         return false;
     }
 
     _display.setTextColor(COLOR_ON);
     _display.setTextWrap(false);
-    Clear();
+    _display.clearDisplay();
+    _display.display();
     return true;
 }
 
+// Clears the display buffer (does not update the screen until Show() is called)    
 void Screen::Clear()
 {
     _display.clearDisplay();
 }
 
+// Displays the given text at the specified position and size (size is a multiplier, e.g. 2 = double size)
 void Screen::ShowText(String msg, int x, int y, int size)
 {
     _display.setTextSize(size);
@@ -37,6 +40,7 @@ void Screen::ShowText(String msg, int x, int y, int size)
     _display.print(msg);
 }
 
+// Displays two lines of text
 void Screen::ShowTwoLine(String line1, String line2)
 {
     _display.setTextSize(1);
@@ -47,11 +51,13 @@ void Screen::ShowTwoLine(String line1, String line2)
     _display.println(line2);
 }
 
+// Updates the physical display with the current contents of the display buffer
 void Screen::Show()
 {
     _display.display();
 }
 
+// Calculates the pixel width of a given text string at a specified size (size is a multiplier, e.g. 2 = double size)
 int Screen::GetTextPixelWidth(String text, int size)
 {
     return text.length() * 6 * size;
