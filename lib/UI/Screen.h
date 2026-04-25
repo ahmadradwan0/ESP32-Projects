@@ -12,7 +12,7 @@ class Screen
         bool Init();
         void Clear();
         void ShowText(String msg,int x, int y ,int size);
-        void ShowTwoLine(String line1, String line2);
+        void DrawDividers();
         void Show();
         int  GetTextPixelWidth(String text, int size);
 

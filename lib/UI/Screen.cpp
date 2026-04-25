@@ -40,15 +40,11 @@ void Screen::ShowText(String msg, int x, int y, int size)
     _display.print(msg);
 }
 
-// Displays two lines of text
-void Screen::ShowTwoLine(String line1, String line2)
+// Displays two DrawDividers
+void Screen::DrawDividers() 
 {
-    _display.setTextSize(1);
-    _display.setCursor(0, 0);
-    _display.println(line1);
-    _display.setTextSize(2);
-    _display.setCursor(0, 16);
-    _display.println(line2);
+    _display.drawLine(0, 8, 127, 0, COLOR_ON);     // top edge
+    _display.drawLine(0, 63, 127, 63, COLOR_ON);   // bottom edge
 }
 
 // Updates the physical display with the current contents of the display buffer

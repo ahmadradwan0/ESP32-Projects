@@ -14,13 +14,15 @@ void setup() {
     for(;;); // Don't proceed, loop forever
   }
   
-  scroller.SetMessage("Hello world! ESP32-S3 is awesome!");
-  scroller.SetSize(3);
-  scroller.SetSpeed(2);
+  scroller.SetMessage("This Message Scrolls Across The Screen!");
+  scroller.SetSize(2);
+  scroller.SetSpeed(3);
   scroller.SetY(30);
 }
 
 void loop() {
   scroller.Update();
+  screen.DrawDividers();
+  screen.Show();
   delay(30);
 }

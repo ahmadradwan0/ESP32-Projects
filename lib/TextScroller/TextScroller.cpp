@@ -32,7 +32,6 @@ void TextScroller::SetY(int y) {
 void TextScroller::Update() {
   _screen->Clear();
   _screen->ShowText(_message, _x, _y, _size);
-  _screen->Show();
   
   _x -= _speed;
   
