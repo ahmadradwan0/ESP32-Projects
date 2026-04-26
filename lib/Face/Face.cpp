@@ -110,12 +110,12 @@ void Face::SetEyeRoundness(int radius) {
 }
 
 void Face::ResetEyeShape() {
-  if (_eyes) {
-    _eyes->setWidth(36, 36);
-    _eyes->setHeight(36, 36);
-    _eyes->setBorderradius(6, 6);
-    _eyes->setSpacebetween(10);
-  }
+  if (!_eyes) return;
+  _resetEffects();
+  _eyes->setWidth(36, 36);
+  _eyes->setHeight(36, 36);
+  _eyes->setBorderradius(6, 6);
+  _eyes->setSpacebetween(10);
 }
 
 void Face::AutonomousMode(bool on) {
@@ -142,28 +142,66 @@ void Face::_autonomousTick() {
       newPhase = random(17);
     }
     _currentMoodPhase = newPhase;
+    unsigned long duration = 12000 + random(18000);   // default for everyone
 
-    switch (newPhase) {
-      case 0:  Happy();       break;
-      case 1:  Neutral();     break;
-      case 2:  Tired();       break;
-      case 3:  Suspicious();  break;
-      case 4:  Sleepy();      break;
-      case 5:  Surprised();   break;
-      case 6:  Excited();     break;
-      case 7:  Sad();         break;
-      case 8:  Bored();       break;
-      case 9:  Anxious();     break;
-      case 10: InLove();      break;
-      case 11: Scared();      break;
-      case 12: Skeptical();   break;
-      case 13: Dazed();       break;
-      case 14: Mischievous(); break;
-      case 15: Cute();        break;
-      case 16: Mean();        break;
+    switch (newPhase)
+    {
+    case 0:
+        Happy();
+        duration = 60000 + random(60000);
+        break;
+    case 1:
+        Neutral();
+        duration = 60000 + random(60000);
+        break;
+    case 2:
+        Tired();
+        break;
+    case 3:
+        Suspicious();
+        break;
+    case 4:
+        Sleepy();
+        break;
+    case 5:
+        Surprised();
+        break;
+    case 6:
+        Excited();
+        break;
+    case 7:
+        Sad();
+        break;
+    case 8:
+        Bored();
+        break;
+    case 9:
+        Anxious();
+        break;
+    case 10:
+        InLove();
+        break;
+    case 11:
+        Scared();
+        break;
+    case 12:
+        Skeptical();
+        break;
+    case 13:
+        Dazed();
+        break;
+    case 14:
+        Mischievous();
+        break;
+    case 15:
+        Cute();
+        break;
+    case 16:
+        Mean();
+        break;
     }
 
-    _moodChangeTimer = now + 12000 + random(18000);
+    _moodChangeTimer = now + duration;
   }
 
   // Random small reactions
@@ -184,24 +222,37 @@ void Face::_autonomousTick() {
   }
 }
 
+void Face::_resetEffects() {
+  if (!_eyes) return;
+  _eyes->setHFlicker(OFF, 0);
+  _eyes->setVFlicker(OFF, 0);
+  _eyes->setSweat(OFF);
+  _eyes->setCuriosity(OFF);
+  _winkPending = false;       // cancel any pending wink from a previous emotion
+}
+
 // ============== BASE METHODS (with sound) ==============
 
 void Face::Happy() {
+    _resetEffects();
   if (_eyes) _eyes->setMood(HAPPY);
   if (_soundEnabled) _sound.Happy();
 }
 
 void Face::Angry() {
+    _resetEffects();
   if (_eyes) _eyes->setMood(ANGRY);
   if (_soundEnabled) _sound.Angry();
 }
 
 void Face::Tired() {
+    _resetEffects();
   if (_eyes) _eyes->setMood(TIRED);
   if (_soundEnabled) _sound.Tired();
 }
 
 void Face::Neutral() {
+    _resetEffects();
   if (_eyes) _eyes->setMood(DEFAULT);
   // no sound for neutral — quiet idle
 }

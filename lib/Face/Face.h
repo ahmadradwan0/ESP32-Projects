@@ -80,4 +80,6 @@ class Face {
     void _autonomousTick();
     Sound _sound;
     bool _soundEnabled;
+    void _resetEffects();
+
 };
