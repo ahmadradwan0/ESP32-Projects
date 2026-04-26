@@ -2,6 +2,7 @@
 #include <Face.h>
 #include <AppServer.h>
 #include "../html/control_panel.h"
+#include <Wire.h> 
 
 // ============================================================
 //  GLOBALS
