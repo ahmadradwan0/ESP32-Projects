@@ -6,6 +6,7 @@
 #define SCREEN_HEIGHT 64
 #define OLED_ADDR 0x3C
 #define FRAMERATE 50
+#define BUZZER_PIN 5
 
 Face::Face() 
   : _display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1),
@@ -15,7 +16,9 @@ Face::Face()
     _reactionTimer(0),
     _currentMoodPhase(0),
     _winkScheduledAt(0),
-    _winkPending(false)
+    _winkPending(false),
+    _sound(BUZZER_PIN),
+    _soundEnabled(true)
 {
 }
 
@@ -34,6 +37,8 @@ bool Face::Init() {
   _eyes->begin(SCREEN_WIDTH, SCREEN_HEIGHT, FRAMERATE);
   _eyes->setAutoblinker(ON, 3, 2);
   _eyes->setIdleMode(ON, 2, 2);
+
+  _sound.Init();
   return true;
 }
 
@@ -45,7 +50,52 @@ void Face::Update() {
     _winkPending = false;
   }
 
+  _sound.Update();
   if (_eyes) _eyes->update();
+}
+
+void Face::EnableSound(bool on) {
+  _soundEnabled = on;
+  if (!on) _sound.Stop();
+}
+
+void Face::TriggerRandomEmotion() {
+  // Temporarily enable sound just for this one emotion
+  bool wasEnabled = _soundEnabled;
+  _soundEnabled = true;
+
+  int newPhase = random(17);
+  while (newPhase == _currentMoodPhase) {
+    newPhase = random(17);
+  }
+  _currentMoodPhase = newPhase;
+
+  switch (newPhase) {
+    case 0:  Happy();       break;
+    case 1:  Neutral();     break;
+    case 2:  Tired();       break;
+    case 3:  Suspicious();  break;
+    case 4:  Sleepy();      break;
+    case 5:  Surprised();   break;
+    case 6:  Excited();     break;
+    case 7:  Sad();         break;
+    case 8:  Bored();       break;
+    case 9:  Anxious();     break;
+    case 10: InLove();      break;
+    case 11: Scared();      break;
+    case 12: Skeptical();   break;
+    case 13: Dazed();       break;
+    case 14: Mischievous(); break;
+    case 15: Cute();        break;
+    case 16: Mean();        break;
+  }
+
+  _soundEnabled = wasEnabled;   // restore previous setting (silent again)
+
+  // Reset the autonomous mood-change timer so it doesn't immediately override
+  if (_autonomous) {
+    _moodChangeTimer = millis() + 12000 + random(18000);
+  }
 }
 
 void Face::SetEyeSize(int width, int height) {
@@ -63,7 +113,7 @@ void Face::ResetEyeShape() {
   if (_eyes) {
     _eyes->setWidth(36, 36);
     _eyes->setHeight(36, 36);
-    _eyes->setBorderradius(6, 6);    // slightly more angular default
+    _eyes->setBorderradius(6, 6);
     _eyes->setSpacebetween(10);
   }
 }
@@ -134,12 +184,27 @@ void Face::_autonomousTick() {
   }
 }
 
-// ============== BASE METHODS ==============
+// ============== BASE METHODS (with sound) ==============
 
-void Face::Happy()   { if (_eyes) _eyes->setMood(HAPPY); }
-void Face::Angry()   { if (_eyes) _eyes->setMood(ANGRY); }
-void Face::Tired()   { if (_eyes) _eyes->setMood(TIRED); }
-void Face::Neutral() { if (_eyes) _eyes->setMood(DEFAULT); }
+void Face::Happy() {
+  if (_eyes) _eyes->setMood(HAPPY);
+  if (_soundEnabled) _sound.Happy();
+}
+
+void Face::Angry() {
+  if (_eyes) _eyes->setMood(ANGRY);
+  if (_soundEnabled) _sound.Angry();
+}
+
+void Face::Tired() {
+  if (_eyes) _eyes->setMood(TIRED);
+  if (_soundEnabled) _sound.Tired();
+}
+
+void Face::Neutral() {
+  if (_eyes) _eyes->setMood(DEFAULT);
+  // no sound for neutral — quiet idle
+}
 
 void Face::LookCenter() { if (_eyes) _eyes->setPosition(DEFAULT); }
 void Face::LookUp()     { if (_eyes) _eyes->setPosition(N); }
@@ -147,28 +212,47 @@ void Face::LookDown()   { if (_eyes) _eyes->setPosition(S); }
 void Face::LookLeft()   { if (_eyes) _eyes->setPosition(W); }
 void Face::LookRight()  { if (_eyes) _eyes->setPosition(E); }
 
-void Face::Blink()     { if (_eyes) _eyes->blink(); }
-void Face::WinkLeft()  { if (_eyes) _eyes->blink(1, 0); }
-void Face::WinkRight() { if (_eyes) _eyes->blink(0, 1); }
-void Face::Laugh()     { if (_eyes) _eyes->anim_laugh(); }
-void Face::Confused()  { if (_eyes) _eyes->anim_confused(); }
+void Face::Blink() {
+  if (_eyes) _eyes->blink();
+}
+
+void Face::WinkLeft() {
+  if (_eyes) _eyes->blink(1, 0);
+  if (_soundEnabled) _sound.Beep();
+}
+
+void Face::WinkRight() {
+  if (_eyes) _eyes->blink(0, 1);
+  if (_soundEnabled) _sound.Beep();
+}
+
+void Face::Laugh() {
+  if (_eyes) _eyes->anim_laugh();
+  if (_soundEnabled) _sound.Laugh();
+}
+
+void Face::Confused() {
+  if (_eyes) _eyes->anim_confused();
+  if (_soundEnabled) _sound.Confused();
+}
 
 void Face::SetCyclops(bool on) { if (_eyes) _eyes->setCyclops(on ? ON : OFF); }
 void Face::SetSweat(bool on)   { if (_eyes) _eyes->setSweat(on ? ON : OFF); }
 void Face::SetCurious(bool on) { if (_eyes) _eyes->setCuriosity(on ? ON : OFF); }
 
 
-// ============== COMPOUND EMOTIONS ==============
+// ============== COMPOUND EMOTIONS (each with its own sound) ==============
 
 // SUSPICIOUS — angry + side glance + smaller eyes
 void Face::Suspicious() {
   ResetEyeShape();
-  Angry();
+  Angry();                                // sets angry mood + plays angry sound
   SetEyeSize(32, 28);
   SetEyeRoundness(4);
   LookRight();
   SetSweat(false);
   SetCurious(true);
+  if (_soundEnabled) _sound.Mischievous();  // override with suspicious-ish sound
 }
 
 // SLEEPY — tired + drooping + smaller eyes
@@ -179,6 +263,7 @@ void Face::Sleepy() {
   SetEyeRoundness(8);
   LookDown();
   SetSweat(false);
+  if (_soundEnabled) _sound.Sleepy();
 }
 
 // SURPRISED — taller and wider, robot-style
@@ -190,6 +275,7 @@ void Face::Surprised() {
   LookUp();
   SetCurious(false);
   SetSweat(false);
+  if (_soundEnabled) _sound.Surprised();
 }
 
 // EXCITED — happy + laugh + slightly bigger
@@ -201,6 +287,7 @@ void Face::Excited() {
   LookCenter();
   Laugh();
   SetCurious(true);
+  if (_soundEnabled) _sound.Excited();
 }
 
 // SAD — tired + look down + smaller eyes
@@ -211,6 +298,7 @@ void Face::Sad() {
   SetEyeRoundness(6);
   LookDown();
   SetSweat(false);
+  if (_soundEnabled) _sound.Sad();
 }
 
 // BORED — half-lidded + look sideways
@@ -221,6 +309,7 @@ void Face::Bored() {
   SetEyeRoundness(6);
   LookLeft();
   SetCurious(false);
+  if (_soundEnabled) _sound.Tired();   // bored shares the tired sigh
 }
 
 // ANXIOUS — angry + sweat + small eyes
@@ -231,6 +320,7 @@ void Face::Anxious() {
   SetEyeRoundness(6);
   SetSweat(true);
   LookCenter();
+  if (_soundEnabled) _sound.Scared();   // nervous stutter
 }
 
 // IN LOVE — happy + sweat (floating bubbles)
@@ -242,6 +332,7 @@ void Face::InLove() {
   SetSweat(true);
   LookCenter();
   SetCurious(true);
+  if (_soundEnabled) _sound.InLove();
 }
 
 // SCARED — wider eyes + nervous shake
@@ -253,6 +344,7 @@ void Face::Scared() {
   SetSweat(true);
   LookUp();
   if (_eyes) _eyes->setHFlicker(ON, 2);
+  if (_soundEnabled) _sound.Scared();
 }
 
 // SKEPTICAL — angry + raised brow effect (asymmetric eyes)
@@ -267,6 +359,7 @@ void Face::Skeptical() {
   LookLeft();
   SetSweat(false);
   SetCurious(false);
+  if (_soundEnabled) _sound.Curious();   // questioning chirp
 }
 
 // DAZED — small + wobble
@@ -277,6 +370,7 @@ void Face::Dazed() {
   SetEyeRoundness(4);
   if (_eyes) _eyes->setVFlicker(ON, 3);
   SetSweat(false);
+  if (_soundEnabled) _sound.Confused();   // wavering warble
 }
 
 // MISCHIEVOUS — happy + side glance + delayed wink
@@ -289,6 +383,7 @@ void Face::Mischievous() {
   SetCurious(true);
   _winkScheduledAt = millis() + 800;
   _winkPending = true;
+  if (_soundEnabled) _sound.Mischievous();
 }
 
 // CUTE — slightly bigger, soft but rectangular
@@ -300,6 +395,7 @@ void Face::Cute() {
   LookCenter();
   SetCurious(false);
   SetSweat(false);
+  if (_soundEnabled) _sound.Cute();
 }
 
 // MEAN — small angry eyes + side look + sharp
@@ -310,6 +406,7 @@ void Face::Mean() {
   SetEyeRoundness(2);
   LookRight();
   SetSweat(false);
+  if (_soundEnabled) _sound.Mean();
 }
 
 // CRYING — tired + tears + look down
@@ -320,6 +417,7 @@ void Face::Crying() {
   SetEyeRoundness(6);
   SetSweat(true);
   LookDown();
+  if (_soundEnabled) _sound.Sad();
 }
 
 // SNEAKY — squinty + side eye + wink
@@ -332,4 +430,5 @@ void Face::Sneaky() {
   SetCurious(true);
   _winkScheduledAt = millis() + 600;
   _winkPending = true;
+  if (_soundEnabled) _sound.Mischievous();
 }
