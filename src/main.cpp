@@ -1,8 +1,9 @@
 #include <Arduino.h>
 #include <Face.h>
 #include <AppServer.h>
+#include <StatusScreen.h>
 #include "../html/control_panel.h"
-#include <Wire.h> 
+#include <Wire.h>
 
 // ============================================================
 //  GLOBALS
@@ -10,6 +11,7 @@
 
 Face face;
 AppServer server;
+StatusScreen statusScreen;
 
 const char* WIFI_SSID     = "IoT";
 const char* WIFI_PASSWORD = "Qwerty@384#";
@@ -26,35 +28,37 @@ unsigned long _lastDebounceTime = 0;
 
 void registerHomePage() {
   server.OnGetHTML("/", []() {
+    statusScreen.ShowRequest("HOME");
     return String(CONTROL_PANEL_HTML);
   });
 }
 
 void registerMoodRoutes() {
-  server.OnGetText("/face/happy",   []() { face.Happy();   return "ok"; });
-  server.OnGetText("/face/angry",   []() { face.Angry();   return "ok"; });
-  server.OnGetText("/face/tired",   []() { face.Tired();   return "ok"; });
-  server.OnGetText("/face/neutral", []() { face.Neutral(); return "ok"; });
+  server.OnGetText("/face/happy",   []() { statusScreen.ShowRequest("HAPPY");   face.Happy();   return "ok"; });
+  server.OnGetText("/face/angry",   []() { statusScreen.ShowRequest("ANGRY");   face.Angry();   return "ok"; });
+  server.OnGetText("/face/tired",   []() { statusScreen.ShowRequest("TIRED");   face.Tired();   return "ok"; });
+  server.OnGetText("/face/neutral", []() { statusScreen.ShowRequest("NEUTRAL"); face.Neutral(); return "ok"; });
 }
 
 void registerLookRoutes() {
-  server.OnGetText("/look/up",     []() { face.LookUp();     return "ok"; });
-  server.OnGetText("/look/down",   []() { face.LookDown();   return "ok"; });
-  server.OnGetText("/look/left",   []() { face.LookLeft();   return "ok"; });
-  server.OnGetText("/look/right",  []() { face.LookRight();  return "ok"; });
-  server.OnGetText("/look/center", []() { face.LookCenter(); return "ok"; });
+  server.OnGetText("/look/up",     []() { statusScreen.ShowRequest("UP");     face.LookUp();     return "ok"; });
+  server.OnGetText("/look/down",   []() { statusScreen.ShowRequest("DOWN");   face.LookDown();   return "ok"; });
+  server.OnGetText("/look/left",   []() { statusScreen.ShowRequest("LEFT");   face.LookLeft();   return "ok"; });
+  server.OnGetText("/look/right",  []() { statusScreen.ShowRequest("RIGHT");  face.LookRight();  return "ok"; });
+  server.OnGetText("/look/center", []() { statusScreen.ShowRequest("CENTER"); face.LookCenter(); return "ok"; });
 }
 
 void registerActionRoutes() {
-  server.OnGetText("/face/blink",     []() { face.Blink();     return "ok"; });
-  server.OnGetText("/face/winkleft",  []() { face.WinkLeft();  return "ok"; });
-  server.OnGetText("/face/winkright", []() { face.WinkRight(); return "ok"; });
-  server.OnGetText("/face/laugh",     []() { face.Laugh();     return "ok"; });
-  server.OnGetText("/face/confused",  []() { face.Confused();  return "ok"; });
+  server.OnGetText("/face/blink",     []() { statusScreen.ShowRequest("BLINK");    face.Blink();     return "ok"; });
+  server.OnGetText("/face/winkleft",  []() { statusScreen.ShowRequest("WINK L");   face.WinkLeft();  return "ok"; });
+  server.OnGetText("/face/winkright", []() { statusScreen.ShowRequest("WINK R");   face.WinkRight(); return "ok"; });
+  server.OnGetText("/face/laugh",     []() { statusScreen.ShowRequest("LAUGH");    face.Laugh();     return "ok"; });
+  server.OnGetText("/face/confused",  []() { statusScreen.ShowRequest("CONFUSED"); face.Confused();  return "ok"; });
 }
 
 void registerStatusRoute() {
   server.OnGetJSON("/status", []() {
+    statusScreen.ShowRequest("STATUS");
     return String("{\"alive\":true}");
   });
 }
@@ -63,8 +67,15 @@ void registerStatusRoute() {
 //  INITIALIZATION
 // ============================================================
 
+void initStatusScreen() {
+  if (statusScreen.Init()) {
+    statusScreen.ShowMessage("Booting...", "");
+  }
+}
+
 void initFace() {
   if (!face.Init()) {
+    statusScreen.ShowMessage("Face init", "FAILED");
     for (;;);
   }
   face.AutonomousMode(true);
@@ -76,10 +87,12 @@ void initButton() {
 }
 
 void initServer() {
+  statusScreen.ShowMessage("WiFi:", "Connecting...");
+
   server.SetWifi(WIFI_SSID, WIFI_PASSWORD);
 
   server.OnConnected([](IPAddress ip) {
-    // Hook for when WiFi connects
+    statusScreen.ShowMessage("IP:", ip.toString());
   });
 
   registerHomePage();
@@ -88,7 +101,9 @@ void initServer() {
   registerActionRoutes();
   registerStatusRoute();
 
-  server.Start();
+  if (!server.Start()) {
+    statusScreen.ShowMessage("WiFi", "FAILED");
+  }
 }
 
 // ============================================================
@@ -107,6 +122,7 @@ void handleButton() {
     if (currentState != stableState) {
       stableState = currentState;
       if (stableState == LOW) {
+        statusScreen.ShowRequest("BUTTON");
         face.TriggerRandomEmotion();
       }
     }
@@ -120,6 +136,7 @@ void handleButton() {
 // ============================================================
 
 void setup() {
+  initStatusScreen();   // first — so other init can show messages
   initFace();
   initButton();
   initServer();
