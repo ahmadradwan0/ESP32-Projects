@@ -1,17 +1,30 @@
 #include <Arduino.h>
-#include <Face.h>
 #include <AppServer.h>
 #include <StatusScreen.h>
+#include <ScreenManager.h>
+#include <FaceView.h>
+#include <BuzzerSound.h>
 #include "../html/control_panel.h"
-#include <Wire.h>
 
 // ============================================================
 //  GLOBALS
 // ============================================================
 
-Face face;
-AppServer server;
+// Sound: a single buzzer is shared across every view (DI target).
+BuzzerSound  buzzer(5);
+
+// FaceView: takes ISound& by reference at construction. The display is
+// bound separately, after ScreenManager has begun its OLED.
+FaceView     face(buzzer);
+
+// ScreenManager: owns the big OLED. Defaults match the old Face setup
+// (128x64, addr 0x3C, SDA=8, SCL=9, &Wire).
+ScreenManager screenManager;
+
+// Independent of the view system — small OLED on its own I2C bus.
 StatusScreen statusScreen;
+
+AppServer    server;
 
 const char* WIFI_SSID     = "IoT";
 const char* WIFI_PASSWORD = "Qwerty@384#";
@@ -23,7 +36,7 @@ bool _lastButtonState = HIGH;
 unsigned long _lastDebounceTime = 0;
 
 // ============================================================
-//  ROUTE HANDLERS
+//  ROUTE HANDLERS — unchanged: face.* surface is identical
 // ============================================================
 
 void registerHomePage() {
@@ -74,10 +87,22 @@ void initStatusScreen() {
 }
 
 void initFace() {
-  if (!face.Init()) {
-    statusScreen.ShowMessage("Face init", "FAILED");
+  // 1. ScreenManager owns and inits the big OLED (Wire.begin(8, 9) etc.)
+  if (!screenManager.Init()) {
+    statusScreen.ShowMessage("Screen init", "FAILED");
     for (;;);
   }
+
+  // 2. FaceView binds to that display — RoboEyes is allocated here.
+  face.Bind(screenManager.GetDisplay());
+
+  // 3. Sound is shared infrastructure now — init it once in main.
+  buzzer.Init();
+
+  // 4. Tell ScreenManager the face is the always-on default view.
+  screenManager.SetDefaultView(&face);
+
+  // 5. Same as before: alive but quiet ambient mood.
   face.AutonomousMode(true);
   face.EnableSound(false);
 }
@@ -136,14 +161,15 @@ void handleButton() {
 // ============================================================
 
 void setup() {
-  initStatusScreen();   // first — so other init can show messages
+  initStatusScreen();
   initFace();
   initButton();
   initServer();
 }
 
 void loop() {
-  face.Update();
+  buzzer.Update();           // advance sound queue (was inside face.Update)
+  screenManager.Update();    // calls face.Draw() under the hood
   server.Update();
   handleButton();
 }
