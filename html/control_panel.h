@@ -55,6 +55,7 @@ const char CONTROL_PANEL_HTML[] PROGMEM = R"rawliteral(
     .btn:active { transform: translateY(0); filter: brightness(0.85); }
     .btn-mood   { background: linear-gradient(135deg, #4af, #2876d6); color: white; border: none; }
     .btn-action { background: linear-gradient(135deg, #f7b731, #e58e26); color: white; border: none; }
+    .btn-api { background: linear-gradient(135deg, #2ecc71, #27ae60); color: white; border: none; box-shadow: 0 0 8px rgba(46, 204, 113, 0.6); }
     .btn-look   { background: rgba(255,255,255,0.08); color: #eee; border: 1px solid rgba(255,255,255,0.1); }
     .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
     .dpad {
@@ -93,6 +94,14 @@ const char CONTROL_PANEL_HTML[] PROGMEM = R"rawliteral(
       <button class="btn btn-mood" onclick="hit('/face/neutral')"><i class="bi bi-emoji-neutral"></i> Neutral</button>
     </div>
   </div></div>
+
+    <div class="card"><div class="card-body">
+        <div class="card-title">API's</div>
+            <div class="grid-2">
+                <button class="btn btn-api" onclick="hit('/weather')">🌤️ Weather</button>
+            </div>
+        </div>
+    </div>
 
   <div class="card"><div class="card-body">
     <div class="card-title">Look</div>

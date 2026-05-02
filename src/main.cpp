@@ -4,6 +4,7 @@
 #include <ScreenManager.h>
 #include <FaceView.h>
 #include <BuzzerSound.h>
+#include <WeatherView.h> 
 #include "../html/control_panel.h"
 
 // ============================================================
@@ -16,7 +17,7 @@ BuzzerSound  buzzer(5);
 // FaceView: takes ISound& by reference at construction. The display is
 // bound separately, after ScreenManager has begun its OLED.
 FaceView     face(buzzer);
-
+WeatherView  weatherView(buzzer); 
 // ScreenManager: owns the big OLED. Defaults match the old Face setup
 // (128x64, addr 0x3C, SDA=8, SCL=9, &Wire).
 ScreenManager screenManager;
@@ -76,6 +77,15 @@ void registerStatusRoute() {
   });
 }
 
+void registerWeatherRoute() {
+  // Weather route — triggers the weather view for 15 seconds
+  server.OnGetText("/weather", []() {
+    statusScreen.ShowRequest("WEATHER");
+    screenManager.ShowView(&weatherView, 15000);
+    return "Weather shown";
+  });
+}
+
 // ============================================================
 //  INITIALIZATION
 // ============================================================
@@ -125,6 +135,7 @@ void initServer() {
   registerLookRoutes();
   registerActionRoutes();
   registerStatusRoute();
+  registerWeatherRoute();  
 
   if (!server.Start()) {
     statusScreen.ShowMessage("WiFi", "FAILED");
