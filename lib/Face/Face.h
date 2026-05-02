@@ -1,6 +1,7 @@
 #pragma once
 #include <Arduino.h>
 #include <Adafruit_SSD1306.h>
+#include "Sound.h"
 
 template<typename T> class RoboEyes;
 
@@ -61,11 +62,15 @@ class Face {
     void SetEyeSize(int width, int height);
     void SetEyeRoundness(int radius);
     void ResetEyeShape();
+    void EnableSound(bool on);
+    void TriggerRandomEmotion();    // pick random emotion + play its sound, just this once
+
+
 
   private:
     Adafruit_SSD1306 _display;
     RoboEyes<Adafruit_SSD1306>* _eyes;
-    
+
     unsigned long _winkScheduledAt;   // for delayed winks in compound emotions
     bool _winkPending;
     bool _autonomous;
@@ -73,4 +78,8 @@ class Face {
     unsigned long _reactionTimer;
     int _currentMoodPhase;
     void _autonomousTick();
+    Sound _sound;
+    bool _soundEnabled;
+    void _resetEffects();
+
 };

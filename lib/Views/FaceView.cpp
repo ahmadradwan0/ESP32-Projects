@@ -1,66 +1,72 @@
-#include "Face.h"
-#include <Wire.h>
+#include "FaceView.h"
 #include <FluxGarage_RoboEyes.h>
 
-#define SCREEN_WIDTH 128
+// These match the big OLED that ScreenManager owns. Kept as named constants
+// so the RoboEyes coordinate space is explicit at the call site.
+#define SCREEN_WIDTH  128
 #define SCREEN_HEIGHT 64
-#define OLED_ADDR 0x3C
-#define FRAMERATE 50
-#define BUZZER_PIN 5
+#define FRAMERATE     50
 
-Face::Face() 
-  : _display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1),
+// ============================================================
+//  Construction / binding / lifecycle
+// ============================================================
+
+FaceView::FaceView(ISound& sound)
+  : _sound(sound),
+    _soundEnabled(true),
     _eyes(nullptr),
+    _winkScheduledAt(0),
+    _winkPending(false),
     _autonomous(false),
     _moodChangeTimer(0),
     _reactionTimer(0),
-    _currentMoodPhase(0),
-    _winkScheduledAt(0),
-    _winkPending(false),
-    _sound(BUZZER_PIN),
-    _soundEnabled(true)
+    _currentMoodPhase(0)
 {
 }
 
-Face::~Face() {
+FaceView::~FaceView() {
   delete _eyes;
 }
 
-bool Face::Init() {
-  Wire.begin(8, 9);
+void FaceView::Bind(Adafruit_SSD1306& display) {
+  if (_eyes != nullptr) return;   // bind-once: ignore subsequent calls
 
-  if (!_display.begin(SSD1306_SWITCHCAPVCC, OLED_ADDR)) {
-    return false;
-  }
-
-  _eyes = new RoboEyes<Adafruit_SSD1306>(_display);
+  _eyes = new RoboEyes<Adafruit_SSD1306>(display);
   _eyes->begin(SCREEN_WIDTH, SCREEN_HEIGHT, FRAMERATE);
   _eyes->setAutoblinker(ON, 3, 2);
   _eyes->setIdleMode(ON, 2, 2);
-
-  _sound.Init();
-  return true;
 }
 
-void Face::Update() {
+void FaceView::Draw(Adafruit_SSD1306& display) {
+  (void)display;   // _eyes already references the bound display
+  if (!_eyes) return;
+
   if (_autonomous) _autonomousTick();
 
   if (_winkPending && millis() >= _winkScheduledAt) {
-    if (_eyes) _eyes->blink(0, 1);
+    _eyes->blink(0, 1);
     _winkPending = false;
   }
 
-  _sound.Update();
-  if (_eyes) _eyes->update();
+  _eyes->update();
 }
 
-void Face::EnableSound(bool on) {
+// ============================================================
+//  Sound gating
+// ============================================================
+
+void FaceView::EnableSound(bool on) {
   _soundEnabled = on;
   if (!on) _sound.Stop();
 }
 
-void Face::TriggerRandomEmotion() {
-  // Temporarily enable sound just for this one emotion
+// ============================================================
+//  Random emotion (button-driven)
+// ============================================================
+
+void FaceView::TriggerRandomEmotion() {
+  // Always sound for explicit user-triggered emotion, regardless of the
+  // ambient mute state.
   bool wasEnabled = _soundEnabled;
   _soundEnabled = true;
 
@@ -90,26 +96,30 @@ void Face::TriggerRandomEmotion() {
     case 16: Mean();        break;
   }
 
-  _soundEnabled = wasEnabled;   // restore previous setting (silent again)
+  _soundEnabled = wasEnabled;
 
-  // Reset the autonomous mood-change timer so it doesn't immediately override
+  // Don't let autonomous tick stomp on the user's pick immediately
   if (_autonomous) {
     _moodChangeTimer = millis() + 12000 + random(18000);
   }
 }
 
-void Face::SetEyeSize(int width, int height) {
+// ============================================================
+//  Eye shape helpers
+// ============================================================
+
+void FaceView::SetEyeSize(int width, int height) {
   if (_eyes) {
     _eyes->setWidth(width, width);
     _eyes->setHeight(height, height);
   }
 }
 
-void Face::SetEyeRoundness(int radius) {
+void FaceView::SetEyeRoundness(int radius) {
   if (_eyes) _eyes->setBorderradius(radius, radius);
 }
 
-void Face::ResetEyeShape() {
+void FaceView::ResetEyeShape() {
   if (!_eyes) return;
   _resetEffects();
   _eyes->setWidth(36, 36);
@@ -118,11 +128,24 @@ void Face::ResetEyeShape() {
   _eyes->setSpacebetween(10);
 }
 
-void Face::AutonomousMode(bool on) {
+void FaceView::_resetEffects() {
+  if (!_eyes) return;
+  _eyes->setHFlicker(OFF, 0);
+  _eyes->setVFlicker(OFF, 0);
+  _eyes->setSweat(OFF);
+  _eyes->setCuriosity(OFF);
+  _winkPending = false;   // cancel any pending wink from a prior emotion
+}
+
+// ============================================================
+//  Autonomous mode
+// ============================================================
+
+void FaceView::AutonomousMode(bool on) {
   _autonomous = on;
   if (on) {
     _moodChangeTimer = millis() + 5000;
-    _reactionTimer = millis() + 4000;
+    _reactionTimer   = millis() + 4000;
 
     if (_eyes) {
       _eyes->setAutoblinker(ON, 2, 4);
@@ -131,83 +154,45 @@ void Face::AutonomousMode(bool on) {
   }
 }
 
-void Face::_autonomousTick() {
+void FaceView::_autonomousTick() {
   unsigned long now = millis();
 
-  // Mood phase changes (every 12-30 seconds)
+  // Mood phase changes (every ~12-30 seconds, longer for happy/neutral)
   if (now >= _moodChangeTimer) {
     int newPhase = random(17);
-
     while (newPhase == _currentMoodPhase) {
       newPhase = random(17);
     }
     _currentMoodPhase = newPhase;
-    unsigned long duration = 12000 + random(18000);   // default for everyone
 
-    switch (newPhase)
-    {
-    case 0:
-        Happy();
-        duration = 60000 + random(60000);
-        break;
-    case 1:
-        Neutral();
-        duration = 60000 + random(60000);
-        break;
-    case 2:
-        Tired();
-        break;
-    case 3:
-        Suspicious();
-        break;
-    case 4:
-        Sleepy();
-        break;
-    case 5:
-        Surprised();
-        break;
-    case 6:
-        Excited();
-        break;
-    case 7:
-        Sad();
-        break;
-    case 8:
-        Bored();
-        break;
-    case 9:
-        Anxious();
-        break;
-    case 10:
-        InLove();
-        break;
-    case 11:
-        Scared();
-        break;
-    case 12:
-        Skeptical();
-        break;
-    case 13:
-        Dazed();
-        break;
-    case 14:
-        Mischievous();
-        break;
-    case 15:
-        Cute();
-        break;
-    case 16:
-        Mean();
-        break;
+    unsigned long duration = 12000 + random(18000);
+
+    switch (newPhase) {
+      case 0:  Happy();       duration = 60000 + random(60000); break;
+      case 1:  Neutral();     duration = 60000 + random(60000); break;
+      case 2:  Tired();       break;
+      case 3:  Suspicious();  break;
+      case 4:  Sleepy();      break;
+      case 5:  Surprised();   break;
+      case 6:  Excited();     break;
+      case 7:  Sad();         break;
+      case 8:  Bored();       break;
+      case 9:  Anxious();     break;
+      case 10: InLove();      break;
+      case 11: Scared();      break;
+      case 12: Skeptical();   break;
+      case 13: Dazed();       break;
+      case 14: Mischievous(); break;
+      case 15: Cute();        break;
+      case 16: Mean();        break;
     }
 
     _moodChangeTimer = now + duration;
   }
 
-  // Random small reactions
+  // Small reactions sprinkled in between mood changes
   if (now >= _reactionTimer) {
     int reaction = random(8);
-
     switch (reaction) {
       case 0: Laugh();    break;
       case 1: Confused(); break;
@@ -217,97 +202,102 @@ void Face::_autonomousTick() {
       case 5: LookUp();   break;
       case 6: LookDown(); break;
     }
-
     _reactionTimer = now + 6000 + random(9000);
   }
 }
 
-void Face::_resetEffects() {
-  if (!_eyes) return;
-  _eyes->setHFlicker(OFF, 0);
-  _eyes->setVFlicker(OFF, 0);
-  _eyes->setSweat(OFF);
-  _eyes->setCuriosity(OFF);
-  _winkPending = false;       // cancel any pending wink from a previous emotion
-}
+// ============================================================
+//  Base moods
+// ============================================================
 
-// ============== BASE METHODS (with sound) ==============
-
-void Face::Happy() {
-    _resetEffects();
+void FaceView::Happy() {
+  _resetEffects();
   if (_eyes) _eyes->setMood(HAPPY);
   if (_soundEnabled) _sound.Happy();
 }
 
-void Face::Angry() {
-    _resetEffects();
+void FaceView::Angry() {
+  _resetEffects();
   if (_eyes) _eyes->setMood(ANGRY);
   if (_soundEnabled) _sound.Angry();
 }
 
-void Face::Tired() {
-    _resetEffects();
+void FaceView::Tired() {
+  _resetEffects();
   if (_eyes) _eyes->setMood(TIRED);
   if (_soundEnabled) _sound.Tired();
 }
 
-void Face::Neutral() {
-    _resetEffects();
+void FaceView::Neutral() {
+  _resetEffects();
   if (_eyes) _eyes->setMood(DEFAULT);
-  // no sound for neutral — quiet idle
+  // intentionally silent — quiet idle
 }
 
-void Face::LookCenter() { if (_eyes) _eyes->setPosition(DEFAULT); }
-void Face::LookUp()     { if (_eyes) _eyes->setPosition(N); }
-void Face::LookDown()   { if (_eyes) _eyes->setPosition(S); }
-void Face::LookLeft()   { if (_eyes) _eyes->setPosition(W); }
-void Face::LookRight()  { if (_eyes) _eyes->setPosition(E); }
+// ============================================================
+//  Looking
+// ============================================================
 
-void Face::Blink() {
+void FaceView::LookCenter() { if (_eyes) _eyes->setPosition(DEFAULT); }
+void FaceView::LookUp()     { if (_eyes) _eyes->setPosition(N); }
+void FaceView::LookDown()   { if (_eyes) _eyes->setPosition(S); }
+void FaceView::LookLeft()   { if (_eyes) _eyes->setPosition(W); }
+void FaceView::LookRight()  { if (_eyes) _eyes->setPosition(E); }
+
+// ============================================================
+//  One-shot animations
+// ============================================================
+
+void FaceView::Blink() {
   if (_eyes) _eyes->blink();
 }
 
-void Face::WinkLeft() {
+void FaceView::WinkLeft() {
   if (_eyes) _eyes->blink(1, 0);
   if (_soundEnabled) _sound.Beep();
 }
 
-void Face::WinkRight() {
+void FaceView::WinkRight() {
   if (_eyes) _eyes->blink(0, 1);
   if (_soundEnabled) _sound.Beep();
 }
 
-void Face::Laugh() {
+void FaceView::Laugh() {
   if (_eyes) _eyes->anim_laugh();
   if (_soundEnabled) _sound.Laugh();
 }
 
-void Face::Confused() {
+void FaceView::Confused() {
   if (_eyes) _eyes->anim_confused();
   if (_soundEnabled) _sound.Confused();
 }
 
-void Face::SetCyclops(bool on) { if (_eyes) _eyes->setCyclops(on ? ON : OFF); }
-void Face::SetSweat(bool on)   { if (_eyes) _eyes->setSweat(on ? ON : OFF); }
-void Face::SetCurious(bool on) { if (_eyes) _eyes->setCuriosity(on ? ON : OFF); }
+// ============================================================
+//  Effect toggles
+// ============================================================
 
+void FaceView::SetCyclops(bool on) { if (_eyes) _eyes->setCyclops(on ? ON : OFF); }
+void FaceView::SetSweat(bool on)   { if (_eyes) _eyes->setSweat(on ? ON : OFF); }
+void FaceView::SetCurious(bool on) { if (_eyes) _eyes->setCuriosity(on ? ON : OFF); }
 
-// ============== COMPOUND EMOTIONS (each with its own sound) ==============
+// ============================================================
+//  Compound emotions — each composed from the primitives above
+// ============================================================
 
 // SUSPICIOUS — angry + side glance + smaller eyes
-void Face::Suspicious() {
+void FaceView::Suspicious() {
   ResetEyeShape();
-  Angry();                                // sets angry mood + plays angry sound
+  Angry();
   SetEyeSize(32, 28);
   SetEyeRoundness(4);
   LookRight();
   SetSweat(false);
   SetCurious(true);
-  if (_soundEnabled) _sound.Mischievous();  // override with suspicious-ish sound
+  if (_soundEnabled) _sound.Mischievous();
 }
 
 // SLEEPY — tired + drooping + smaller eyes
-void Face::Sleepy() {
+void FaceView::Sleepy() {
   ResetEyeShape();
   Tired();
   SetEyeSize(36, 22);
@@ -318,7 +308,7 @@ void Face::Sleepy() {
 }
 
 // SURPRISED — taller and wider, robot-style
-void Face::Surprised() {
+void FaceView::Surprised() {
   ResetEyeShape();
   Neutral();
   SetEyeSize(42, 44);
@@ -330,7 +320,7 @@ void Face::Surprised() {
 }
 
 // EXCITED — happy + laugh + slightly bigger
-void Face::Excited() {
+void FaceView::Excited() {
   ResetEyeShape();
   Happy();
   SetEyeSize(38, 38);
@@ -342,7 +332,7 @@ void Face::Excited() {
 }
 
 // SAD — tired + look down + smaller eyes
-void Face::Sad() {
+void FaceView::Sad() {
   ResetEyeShape();
   Tired();
   SetEyeSize(30, 26);
@@ -353,7 +343,7 @@ void Face::Sad() {
 }
 
 // BORED — half-lidded + look sideways
-void Face::Bored() {
+void FaceView::Bored() {
   ResetEyeShape();
   Tired();
   SetEyeSize(36, 20);
@@ -364,7 +354,7 @@ void Face::Bored() {
 }
 
 // ANXIOUS — angry + sweat + small eyes
-void Face::Anxious() {
+void FaceView::Anxious() {
   ResetEyeShape();
   Angry();
   SetEyeSize(30, 30);
@@ -374,8 +364,8 @@ void Face::Anxious() {
   if (_soundEnabled) _sound.Scared();   // nervous stutter
 }
 
-// IN LOVE — happy + sweat (floating bubbles)
-void Face::InLove() {
+// IN LOVE — happy + sweat + curious bubbles
+void FaceView::InLove() {
   ResetEyeShape();
   Happy();
   SetEyeSize(36, 36);
@@ -386,8 +376,8 @@ void Face::InLove() {
   if (_soundEnabled) _sound.InLove();
 }
 
-// SCARED — wider eyes + nervous shake
-void Face::Scared() {
+// SCARED — wide eyes + nervous shake
+void FaceView::Scared() {
   ResetEyeShape();
   Neutral();
   SetEyeSize(40, 40);
@@ -398,8 +388,8 @@ void Face::Scared() {
   if (_soundEnabled) _sound.Scared();
 }
 
-// SKEPTICAL — angry + raised brow effect (asymmetric eyes)
-void Face::Skeptical() {
+// SKEPTICAL — angry + asymmetric eyes (raised brow effect)
+void FaceView::Skeptical() {
   ResetEyeShape();
   Angry();
   if (_eyes) {
@@ -413,8 +403,8 @@ void Face::Skeptical() {
   if (_soundEnabled) _sound.Curious();   // questioning chirp
 }
 
-// DAZED — small + wobble
-void Face::Dazed() {
+// DAZED — small + vertical wobble
+void FaceView::Dazed() {
   ResetEyeShape();
   Neutral();
   SetEyeSize(28, 28);
@@ -425,7 +415,7 @@ void Face::Dazed() {
 }
 
 // MISCHIEVOUS — happy + side glance + delayed wink
-void Face::Mischievous() {
+void FaceView::Mischievous() {
   ResetEyeShape();
   Happy();
   SetEyeSize(36, 32);
@@ -437,8 +427,8 @@ void Face::Mischievous() {
   if (_soundEnabled) _sound.Mischievous();
 }
 
-// CUTE — slightly bigger, soft but rectangular
-void Face::Cute() {
+// CUTE — slightly bigger, soft but still rectangular
+void FaceView::Cute() {
   ResetEyeShape();
   Happy();
   SetEyeSize(40, 36);
@@ -449,8 +439,8 @@ void Face::Cute() {
   if (_soundEnabled) _sound.Cute();
 }
 
-// MEAN — small angry eyes + side look + sharp
-void Face::Mean() {
+// MEAN — small angry eyes + side look + sharp corners
+void FaceView::Mean() {
   ResetEyeShape();
   Angry();
   SetEyeSize(26, 22);
@@ -461,7 +451,7 @@ void Face::Mean() {
 }
 
 // CRYING — tired + tears + look down
-void Face::Crying() {
+void FaceView::Crying() {
   ResetEyeShape();
   Tired();
   SetEyeSize(34, 24);
@@ -471,8 +461,8 @@ void Face::Crying() {
   if (_soundEnabled) _sound.Sad();
 }
 
-// SNEAKY — squinty + side eye + wink
-void Face::Sneaky() {
+// SNEAKY — squinty + side eye + delayed wink
+void FaceView::Sneaky() {
   ResetEyeShape();
   Happy();
   SetEyeSize(32, 28);
