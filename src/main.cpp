@@ -5,6 +5,7 @@
 #include <FaceView.h>
 #include <BuzzerSound.h>
 #include <WeatherView.h> 
+#include <ClockView.h>
 #include "../html/control_panel.h"
 
 // ============================================================
@@ -18,6 +19,7 @@ BuzzerSound  buzzer(5);
 // bound separately, after ScreenManager has begun its OLED.
 FaceView     face(buzzer);
 WeatherView  weatherView(buzzer); 
+ClockView    clockView(buzzer);
 // ScreenManager: owns the big OLED. Defaults match the old Face setup
 // (128x64, addr 0x3C, SDA=8, SCL=9, &Wire).
 ScreenManager screenManager;
@@ -86,6 +88,14 @@ void registerWeatherRoute() {
   });
 }
 
+void registerClockRoute() {
+  server.OnGetText("/clock", []() {
+    statusScreen.ShowRequest("CLOCK");
+    screenManager.ShowView(&clockView, 15000);
+    return "Clock shown";
+  });
+}
+
 // ============================================================
 //  INITIALIZATION
 // ============================================================
@@ -121,6 +131,13 @@ void initButton() {
   pinMode(BUTTON_PIN, INPUT_PULLUP);
 }
 
+void initTime() {
+  // Eastern Time with DST (Orlando)
+  configTzTime("EST5EDT,M3.2.0,M11.1.0", "pool.ntp.org", "time.nist.gov");
+  // Wait briefly for sync
+  delay(2000);
+}
+
 void initServer() {
   statusScreen.ShowMessage("WiFi:", "Connecting...");
 
@@ -135,7 +152,8 @@ void initServer() {
   registerLookRoutes();
   registerActionRoutes();
   registerStatusRoute();
-  registerWeatherRoute();  
+  registerWeatherRoute();
+  registerClockRoute();  
 
   if (!server.Start()) {
     statusScreen.ShowMessage("WiFi", "FAILED");
@@ -175,6 +193,7 @@ void setup() {
   initStatusScreen();
   initFace();
   initButton();
+  initTime(); 
   initServer();
 }
 

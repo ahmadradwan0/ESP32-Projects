@@ -231,3 +231,13 @@ void BuzzerSound::Trill() {
     _addNote(1000, 30);
   }
 }
+
+void BuzzerSound::ClockChimes() {
+  _clear();
+  _addNote(500, 100);
+  _addPause(100);
+  _addNote(600, 100);
+  _addPause(100);
+  _addNote(700, 100);
+}
+

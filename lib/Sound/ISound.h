@@ -39,4 +39,6 @@ class ISound {
     virtual void DoubleBeep() = 0;
     virtual void Chirp() = 0;
     virtual void Trill() = 0;
+    virtual void ClockChimes() = 0;
+
 };

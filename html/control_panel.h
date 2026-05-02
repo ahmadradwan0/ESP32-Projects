@@ -99,6 +99,7 @@ const char CONTROL_PANEL_HTML[] PROGMEM = R"rawliteral(
         <div class="card-title">API's</div>
             <div class="grid-2">
                 <button class="btn btn-api" onclick="hit('/weather')">🌤️ Weather</button>
+                <button class="btn btn-api" onclick="hit('/clock')">🕒 Clock</button>
             </div>
         </div>
     </div>

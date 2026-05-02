@@ -34,6 +34,8 @@ class BuzzerSound : public ISound {
     void Chirp() override;
     void Trill() override;
 
+    void ClockChimes() override;
+
   private:
     int _pin;
 
